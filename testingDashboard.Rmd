@@ -1,0 +1,118 @@
+---
+title: "Mortality Causes"
+runtime: shiny
+output: 
+  flexdashboard::flex_dashboard:
+    theme: lumen
+    orientation: columns
+    vertical_layout: fill
+    source-code_embed: TRUE
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(southafricastats)
+library("dplyr")
+library("ggplot2")
+library("tidyr")
+library(leaflet)
+library(DT)
+
+totals <- population_zaf %>%
+  filter(year == 2013) %>%
+  select(province, total)
+
+compare_provinces <- mortality_zaf %>%
+  left_join(totals) %>%
+  mutate(rate = deaths/total * 1000) %>%
+  group_by(province, indicator) %>%
+  summarise(rate = mean(rate)) %>%
+  ungroup %>%
+  left_join(totals) %>%
+  spread(indicator,rate)
+
+
+```
+
+Column {.sidebar}
+======================
+This explores data from the [South Africa Data Portal](http://southafrica.opendataforafrica.org/)
+
+```{r}
+selectInput(inputId = "indicator",
+            label = "Choose a cause of death",
+            choices = unique(mortality_zaf$indicator),
+            # selected = grep("Tuberculosis",colnames(mortality_zaf),value = T)
+            "Tuberculosis (A15-A19)"
+            )
+
+
+```
+
+<!-- This is the first instance (ever) of white space making a difference in R. Make sure not to use spaces between data-icon,=,string. -->
+Map{data-icon="fa-map-o"} 
+==============
+
+### What are the relative mortality rates?
+
+```{r}
+selected_df <- reactive({
+  subset_df <- compare_provinces[,c(1,
+                       which(colnames(compare_provinces) == input$indicator)
+                       )]
+  colnames(subset_df) <- c("province","indicator")
+  population_zaf %>%
+    filter(year==2013) %>%
+    left_join(subset_df) %>%
+    mutate(indicator = indicator / sum(indicator,na.rm=T) )
+  # subset_df
+})
+
+renderLeaflet({
+  leaflet(selected_df()) %>%
+    addProviderTiles("CartoDB.Positron") %>%
+    addCircles(lng = ~longitude, 
+               lat = ~latitude,
+               radius = ~sqrt(indicator), 
+               weight = 2.5, color = "magenta", 
+               popup = ~province
+               )
+})
+```
+
+Compare Provinces {}
+===========
+
+```{r}
+
+```
+
+
+Changes in Time {data-icon="fa-area-chart"}
+==========
+
+### How do number of deaths change over time?
+
+```{r}
+renderPlot({
+  mortality_zaf %>%
+    filter(indicator == input$indicator) %>%
+    ggplot(aes(x = year, y=deaths, color = province)) + 
+    geom_line() +
+    theme_minimal()
+})
+```
+
+
+Table {data-icon="fa-table"}
+==================
+
+### Checl out the data here
+
+```{r}
+renderDataTable({
+  datatable(mortality_zaf %>%
+    filter(indicator == input$indicator))
+})
+```
+
