@@ -1,0 +1,90 @@
+---
+title: "Rmd and Shiny"
+author: "Alex"
+date: "17 February 2017"
+runtime: shiny
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+```
+
+```{r}
+library("dplyr")
+library("ggplot2")
+library("tidyr")
+library("southafricastats")
+
+
+totals <- population_zaf %>%
+  filter(year == 2013) %>%
+  select(province, total)
+
+compare_provinces <- mortality_zaf %>%
+  left_join(totals) %>%
+  mutate(rate = deaths/total * 1000) %>%
+  group_by(province, indicator) %>%
+  summarise(rate = mean(rate)) %>%
+  ungroup %>%
+  left_join(totals) %>%
+  spread(indicator,rate)
+```
+
+```{r}
+# ggplot(data = compare_provinces,
+#        aes(
+#          x = `Tuberculosis (A15-A19)`,
+#          y = `Human immunodeficiency virus [HIV] disease (B20-B24)`,
+#          label = province
+#         )) + 
+#   geom_point(aes(size = total), alpha = 0.8, color = "midnightblue") + 
+#   geom_text(vjust = 2.5) +
+#   geom_abline(slope = 1,intercept = 0) + 
+#   # xlim(c(0,max(compare_provinces$))) + ylim(c(0,2))
+#   # xlim(c(0,max(`Tuberculosis (A15-A19)`))) + ylim(c(0,max(rate)))
+```
+
+```{r}
+selectInput(inputId = "x_axis",
+            label = "Choose x axis",
+            choices = colnames(compare_provinces[,-c(1:2)]),
+            selected = "Tuberculosis (A15-A19)"
+            )
+selectInput(inputId = "y_axis",
+            label = "Choose y axis",
+            choices = colnames(compare_provinces[,-c(1:2)]),
+            selected = "Human immunodeficiency virus [HIV] disease (B20-B24)"
+            )
+```
+
+```{r}
+selected_df <- reactive({
+  subset_df <- compare_provinces[,c(1,2,
+                       which(colnames(compare_provinces) == input$x_axis),
+                       which(colnames(compare_provinces) == input$y_axis)
+                       )]
+  colnames(subset_df) <- c("province","total","x","y")
+  subset_df
+})
+```
+
+```{r}
+# fillCol(height = 800,
+  renderPlot({
+    ggplot(data = selected_df(),
+         aes(
+           x = x,
+           y = y,
+           label = province
+          )) + 
+    geom_point(aes(size = total), alpha = 0.8, color = "midnightblue") + 
+    geom_text(vjust = 2.5) +
+    geom_abline(slope = 1,intercept = 0) + 
+    xlim(c(0,max(c(selected_df()$x,selected_df()$y)))) +
+    ylim(c(0,max(c(selected_df()$x,selected_df()$y))))
+    # xlim(c(0,max(`Tuberculosis (A15-A19)`))) + ylim(c(0,max(rate)))
+  },height = 800)
+# )
+```
+
